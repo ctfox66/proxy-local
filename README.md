@@ -53,7 +53,7 @@ npm install -g pxhub@latest
 ### Docker
 
 ```bash
-docker run -d --name proxyhub -p 3020:3020 -v proxyhub-data:/app/data ghcr.io/fy0/proxy-hub:latest
+docker run -d --name proxyhub -p 3020:3020 -v proxyhub-data:/app/data ghcr.io/ctfox66/proxy-local:latest
 ```
 
 Then open:
@@ -64,7 +64,7 @@ http://127.0.0.1:3020
 
 ### Binary
 
-Download the latest archive from [GitHub Releases](https://github.com/fy0/proxy-hub/releases), extract it, then run `proxy-hub` or `proxy-hub.exe`.
+Download the latest archive from [GitHub Releases](https://github.com/ctfox66/proxy-local/releases), extract it, then run `proxy-hub` or `proxy-hub.exe`.
 
 ## Screenshots
 
@@ -100,6 +100,15 @@ Common keys:
 | `logLevel` | Service log level. |
 
 Only SQLite DSNs are supported.
+
+## Authentication
+
+ProxyHub requires login to access all features. On first launch (no accounts in the database), you can register a new account on the login page. After the first account is created, subsequent signups require an existing account to approve them.
+
+| Endpoint | Public |
+| --- | --- |
+| `POST /api/v1/user/signin` | Always |
+| `POST /api/v1/user/signup` | Only when no accounts exist |
 
 ## Disclaimer
 

@@ -53,7 +53,7 @@ npm install -g pxhub@latest
 ### Docker
 
 ```bash
-docker run -d --name proxyhub -p 3020:3020 -v proxyhub-data:/app/data ghcr.io/fy0/proxy-hub:latest
+docker run -d --name proxyhub -p 3020:3020 -v proxyhub-data:/app/data ghcr.io/ctfox66/proxy-local:latest
 ```
 
 然后打开：
@@ -64,7 +64,7 @@ http://127.0.0.1:3020
 
 ### 二进制
 
-从 [GitHub Releases](https://github.com/fy0/proxy-hub/releases) 下载最新压缩包，解压后运行 `proxy-hub` 或 `proxy-hub.exe`。
+从 [GitHub Releases](https://github.com/ctfox66/proxy-local/releases) 下载最新压缩包，解压后运行 `proxy-hub` 或 `proxy-hub.exe`。
 
 ## 界面截图
 
@@ -100,6 +100,15 @@ ProxyHub 从当前数据目录读取运行配置：
 | `logLevel` | 服务日志级别。 |
 
 仅支持 SQLite DSN。
+
+## 认证
+
+ProxyHub 所有功能均需登录后才能使用。首次启动（数据库无账号时），可在登录页注册第一个账号。创建首个账号后，后续注册需已有账号审批。
+
+| 接口 | 公开 |
+| --- | --- |
+| `POST /api/v1/user/signin` | 始终 |
+| `POST /api/v1/user/signup` | 仅无账号时 |
 
 ## 声明
 
