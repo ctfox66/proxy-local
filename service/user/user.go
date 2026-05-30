@@ -18,8 +18,6 @@ type UserListRequest struct {
 	IncludeDisabled bool
 }
 
-const DefaultRootUsername = "root"
-
 func UserCreate(
 	ctx context.Context,
 	tx model.DBTx,
@@ -158,34 +156,13 @@ func UserGetByUsername(ctx context.Context, tx model.DBTx, username string) (*ta
 	return &user, nil
 }
 
-func UserEnsureDefaultRoot(ctx context.Context, tx model.DBTx) (*tables.UserTable, error) {
+func UserExists(ctx context.Context, tx model.DBTx) (bool, error) {
 	tx = model.GetTx(tx).WithContext(ctx)
-
-	user, err := UserGetByUsername(ctx, tx, DefaultRootUsername)
-	if err != nil {
-		return nil, err
+	var count int64
+	if err := tx.Model(&tables.UserTable{}).Count(&count).Error; err != nil {
+		return false, err
 	}
-	if user != nil {
-		return user, nil
-	}
-
-	password := utils.NewID() + utils.NewID()
-	user, err = UserCreate(ctx, tx, DefaultRootUsername, password, "root", "", "内置默认账号", nil)
-	if err == nil {
-		return user, nil
-	}
-	if !errors.Is(err, ErrUsernameTaken) {
-		return nil, err
-	}
-
-	user, err = UserGetByUsername(ctx, tx, DefaultRootUsername)
-	if err != nil {
-		return nil, err
-	}
-	if user == nil {
-		return nil, ErrUserNotFound
-	}
-	return user, nil
+	return count > 0, nil
 }
 
 func UserUpdateInfo(ctx context.Context, tx model.DBTx, userID string, nickname, brief, avatar string) (*tables.UserTable, error) {

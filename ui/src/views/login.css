@@ -104,29 +104,27 @@
   box-shadow: 0 12px 26px rgb(15 23 42 / 0.16);
 }
 
-.skip-login-button {
-  min-height: 42px;
-  border: 1px solid rgb(148 163 184 / 0.35);
-  border-radius: 11px;
-  background: #ffffff;
-  color: rgb(71 85 105);
-  font-size: 14px;
-  font-weight: 800;
+.mode-switch-link {
+  min-height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: rgb(37 99 235);
+  font-size: 13px;
+  font-weight: 700;
   transition:
     transform 150ms ease,
-    border-color 150ms ease,
-    background-color 150ms ease,
-    color 150ms ease;
+    color 150ms ease,
+    background-color 150ms ease;
 }
 
-.skip-login-button:hover {
+.mode-switch-link:hover {
   transform: translateY(-1px);
-  border-color: rgb(15 23 42 / 0.22);
-  color: rgb(15 23 42);
-  background: rgb(248 250 252);
+  color: rgb(29 78 216);
+  background: rgb(239 246 255);
 }
 
-.skip-login-button:disabled {
+.mode-switch-link:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
@@ -145,8 +143,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .login-back-link:hover,
-  .login-submit:hover,
-  .skip-login-button:hover {
+  .login-submit:hover {
     transform: none;
   }
 }

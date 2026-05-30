@@ -43,19 +43,10 @@ func Register(api huma.API) {
 
 	h.HumaRegister(group, huma.Operation{
 		Method:      http.MethodPost,
-		Path:        "/skip-login",
-		Summary:     "跳过登录并使用内置账号",
-		OperationID: "user-skip-login",
-		Tags:        []string{userTag},
-	}, userSkipLoginHandler)
-
-	h.HumaRegister(group, huma.Operation{
-		Method:      http.MethodPost,
 		Path:        "/change-password",
 		Summary:     "修改密码",
 		OperationID: "user-change-password",
 		Tags:        []string{userTag},
-		Middlewares: huma.Middlewares{h.HumaUserMiddleware},
 	}, userChangePasswordHandler)
 
 	h.HumaRegister(group, huma.Operation{
@@ -64,7 +55,6 @@ func Register(api huma.API) {
 		Summary:     "获取当前用户信息",
 		OperationID: "user-info",
 		Tags:        []string{userTag},
-		Middlewares: huma.Middlewares{h.HumaUserMiddleware},
 	}, userInfoHandler)
 
 	h.HumaRegister(group, huma.Operation{
@@ -73,7 +63,6 @@ func Register(api huma.API) {
 		Summary:     "更新当前用户信息",
 		OperationID: "user-info-update",
 		Tags:        []string{userTag},
-		Middlewares: huma.Middlewares{h.HumaUserMiddleware},
 	}, userInfoUpdateHandler)
 
 	h.HumaRegister(group, huma.Operation{
@@ -82,7 +71,6 @@ func Register(api huma.API) {
 		Summary:     "用户列表",
 		OperationID: "user-list",
 		Tags:        []string{userTag},
-		Middlewares: huma.Middlewares{h.HumaUserMiddleware},
 	}, userListHandler)
 }
 
@@ -91,11 +79,11 @@ type signupInput struct {
 }
 
 type signupOutput struct {
-	Body UserResponse `json:"body"`
+	Body AuthResponse `json:"body"`
 }
 
 func userSignupHandler(ctx context.Context, input *signupInput) (*signupOutput, error) {
-	var created *tables.UserTable
+	var token string
 	err := model.Transaction(ctx, func(tx model.DBTx) error {
 		user, err := userService.UserCreate(ctx, tx,
 			input.Body.Username,
@@ -108,15 +96,18 @@ func userSignupHandler(ctx context.Context, input *signupInput) (*signupOutput, 
 		if err != nil {
 			return err
 		}
-		created = user
-		return nil
+		token, err = userService.AccessTokenGenerate(ctx, tx, user.ID)
+		return err
 	})
 	if err != nil {
 		return nil, mapError(err)
 	}
 
 	return &signupOutput{
-		Body: UserResponse{Item: userService.ToUserDTO(created)},
+		Body: AuthResponse{
+			Message: "注册成功",
+			Token:   token,
+		},
 	}, nil
 }
 
@@ -145,32 +136,6 @@ func userSigninHandler(ctx context.Context, input *signinInput) (*signinOutput, 
 	return &signinOutput{
 		Body: AuthResponse{
 			Message: "登录成功",
-			Token:   token,
-		},
-	}, nil
-}
-
-func userSkipLoginHandler(ctx context.Context, _ *struct{}) (*signinOutput, error) {
-	var token string
-	err := model.Transaction(ctx, func(tx model.DBTx) error {
-		u, err := userService.UserEnsureDefaultRoot(ctx, tx)
-		if err != nil {
-			return err
-		}
-
-		if err := userService.AccessTokenDeleteAllByUserID(ctx, tx, u.ID); err != nil {
-			return err
-		}
-		token, err = userService.AccessTokenGenerate(ctx, tx, u.ID)
-		return err
-	})
-	if err != nil {
-		return nil, mapError(err)
-	}
-
-	return &signinOutput{
-		Body: AuthResponse{
-			Message: "已使用内置账号 root 登录",
 			Token:   token,
 		},
 	}, nil

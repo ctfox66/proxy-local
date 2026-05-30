@@ -8,12 +8,21 @@ import (
 	"testing"
 
 	"github.com/gofiber/fiber/v2"
+	"gorm.io/gorm/logger"
 
 	"proxy-hub/api/h"
+	"proxy-hub/model"
 	"proxy-hub/utils"
 )
 
 func TestSystemVersionRouteReturnsAppInfo(t *testing.T) {
+	if err := model.InitWithDSN(":memory:", int(logger.Silent), true); err != nil {
+		t.Fatalf("InitWithDSN(:memory:) failed: %v", err)
+	}
+	t.Cleanup(model.DBClose)
+
+	token, _ := createTestUserAndToken(t)
+
 	app := fiber.New()
 	_, v1 := h.NewAPI(app, &utils.AppConfig{
 		APITitle:   "Proxy Hub API",
@@ -35,7 +44,7 @@ func TestSystemVersionRouteReturnsAppInfo(t *testing.T) {
 	})
 	registerSystemRoutes(v1)
 
-	resp := mustTestRequest(t, app, http.MethodGet, "/api/v1/system/version")
+	resp := mustAuthTestRequest(t, app, token, http.MethodGet, "/api/v1/system/version")
 	if got := resp.StatusCode; got != http.StatusOK {
 		t.Fatalf("status = %d, want %d", got, http.StatusOK)
 	}
@@ -156,6 +165,13 @@ func TestListenServeAtRejectsInvalidValues(t *testing.T) {
 func TestSystemListenRoutesReadAndUpdateConfig(t *testing.T) {
 	cfg := setupSystemConfigTest(t)
 
+	if err := model.InitWithDSN(":memory:", int(logger.Silent), true); err != nil {
+		t.Fatalf("InitWithDSN(:memory:) failed: %v", err)
+	}
+	t.Cleanup(model.DBClose)
+
+	token, _ := createTestUserAndToken(t)
+
 	app := fiber.New()
 	_, v1 := h.NewAPI(app, cfg)
 	t.Cleanup(func() {
@@ -166,7 +182,7 @@ func TestSystemListenRoutesReadAndUpdateConfig(t *testing.T) {
 		RunningServeAt: ":3020",
 	})
 
-	getResp := mustTestRequest(t, app, http.MethodGet, "/api/v1/system/listen")
+	getResp := mustAuthTestRequest(t, app, token, http.MethodGet, "/api/v1/system/listen")
 	if got := getResp.StatusCode; got != http.StatusOK {
 		t.Fatalf("GET status = %d, want %d", got, http.StatusOK)
 	}
@@ -178,7 +194,7 @@ func TestSystemListenRoutesReadAndUpdateConfig(t *testing.T) {
 		t.Fatalf("GET body = %+v, want current :3020 without restart requirement", current)
 	}
 
-	updateResp := mustJSONTestRequest(t, app, http.MethodPut, "/api/v1/system/listen", `{"listenAddress":"127.0.0.1","listenPort":4040}`)
+	updateResp := mustAuthJSONTestRequest(t, app, token, http.MethodPut, "/api/v1/system/listen", `{"listenAddress":"127.0.0.1","listenPort":4040}`)
 	if got := updateResp.StatusCode; got != http.StatusOK {
 		t.Fatalf("PUT status = %d, want %d", got, http.StatusOK)
 	}
@@ -205,6 +221,13 @@ func TestSystemListenRoutesReadAndUpdateConfig(t *testing.T) {
 func TestSystemListenUpdateRejectsInvalidConfig(t *testing.T) {
 	cfg := setupSystemConfigTest(t)
 
+	if err := model.InitWithDSN(":memory:", int(logger.Silent), true); err != nil {
+		t.Fatalf("InitWithDSN(:memory:) failed: %v", err)
+	}
+	t.Cleanup(model.DBClose)
+
+	token, _ := createTestUserAndToken(t)
+
 	app := fiber.New()
 	_, v1 := h.NewAPI(app, cfg)
 	t.Cleanup(func() {
@@ -212,13 +235,20 @@ func TestSystemListenUpdateRejectsInvalidConfig(t *testing.T) {
 	})
 	registerSystemRoutes(v1, systemRouteOptions{Config: cfg})
 
-	resp := mustJSONTestRequest(t, app, http.MethodPut, "/api/v1/system/listen", `{"listenAddress":"example.com","listenPort":3020}`)
+	resp := mustAuthJSONTestRequest(t, app, token, http.MethodPut, "/api/v1/system/listen", `{"listenAddress":"example.com","listenPort":3020}`)
 	if got := resp.StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("PUT invalid address status = %d, want %d", got, http.StatusBadRequest)
 	}
 }
 
 func TestSystemRestartRequiresConfirmationAndCallsCallback(t *testing.T) {
+	if err := model.InitWithDSN(":memory:", int(logger.Silent), true); err != nil {
+		t.Fatalf("InitWithDSN(:memory:) failed: %v", err)
+	}
+	t.Cleanup(model.DBClose)
+
+	token, _ := createTestUserAndToken(t)
+
 	app := fiber.New()
 	_, v1 := h.NewAPI(app, &utils.AppConfig{
 		APITitle:   "Proxy Hub API",
@@ -239,7 +269,7 @@ func TestSystemRestartRequiresConfirmationAndCallsCallback(t *testing.T) {
 		},
 	})
 
-	rejected := mustJSONTestRequest(t, app, http.MethodPost, "/api/v1/system/restart", `{"confirm":false}`)
+	rejected := mustAuthJSONTestRequest(t, app, token, http.MethodPost, "/api/v1/system/restart", `{"confirm":false}`)
 	if got := rejected.StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("restart without confirm status = %d, want %d", got, http.StatusBadRequest)
 	}
@@ -247,7 +277,7 @@ func TestSystemRestartRequiresConfirmationAndCallsCallback(t *testing.T) {
 		t.Fatalf("restart callback was called without confirmation")
 	}
 
-	accepted := mustJSONTestRequest(t, app, http.MethodPost, "/api/v1/system/restart", `{"confirm":true}`)
+	accepted := mustAuthJSONTestRequest(t, app, token, http.MethodPost, "/api/v1/system/restart", `{"confirm":true}`)
 	if got := accepted.StatusCode; got != http.StatusAccepted {
 		t.Fatalf("restart with confirm status = %d, want %d", got, http.StatusAccepted)
 	}
@@ -278,24 +308,6 @@ func setupSystemConfigTest(t *testing.T) *utils.AppConfig {
 		t.Fatalf("SaveConfig() error = %v", err)
 	}
 	return cfg
-}
-
-func mustJSONTestRequest(t *testing.T, app *fiber.App, method, target, body string) *http.Response {
-	t.Helper()
-
-	req, err := http.NewRequest(method, target, strings.NewReader(body))
-	if err != nil {
-		t.Fatalf("new request %s %s: %v", method, target, err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := app.Test(req)
-	if err != nil {
-		t.Fatalf("app.Test %s %s: %v", method, target, err)
-	}
-	t.Cleanup(func() {
-		_ = resp.Body.Close()
-	})
-	return resp
 }
 
 func TestRequestBodyLimitBytesDefaultsTo64MB(t *testing.T) {

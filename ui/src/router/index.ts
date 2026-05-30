@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import { t } from '@/i18n';
+import { getAccessToken } from '@/api/auth';
 import HomeView from '../views/HomeView.vue';
 
 const appTitle = 'ProxyHub';
@@ -47,13 +48,23 @@ const router = createRouter({
     {
       path: '/about',
       name: 'about',
-      // route level code-splitting
-      // this generates a separate chunk (About.[hash].js) for this route
-      // which is lazy-loaded when the route is visited.
       component: () => import('../views/AboutView.vue'),
       meta: { titleKey: 'app.pageTitles.about' },
     },
   ],
+});
+
+router.beforeEach(to => {
+  if (typeof document === 'undefined') return true;
+
+  if (to.name === 'login') return true;
+
+  const token = getAccessToken();
+  if (!token) {
+    return { name: 'login', query: { redirect: to.fullPath } };
+  }
+
+  return true;
 });
 
 router.afterEach(to => {

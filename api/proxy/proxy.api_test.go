@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 	"proxy-hub/api/h"
 	"proxy-hub/model"
 	proxyService "proxy-hub/service/proxy"
+	userService "proxy-hub/service/user"
 	"proxy-hub/utils"
 
 	"gorm.io/gorm/logger"
@@ -90,10 +92,10 @@ func TestSettingsExportImportHandlersRoundTrip(t *testing.T) {
 		t.Fatalf("MappingCreate() error = %v", err)
 	}
 
-	app, apiGroup := newProxyAPITestApp(t)
+	app, apiGroup, token := newProxyAPITestApp(t)
 	Register(apiGroup)
 
-	exportResp := mustProxyAPITestRequest(t, app, http.MethodGet, "/api/v1/proxy/settings/export", nil)
+	exportResp := mustProxyAPITestRequest(t, app, token, http.MethodGet, "/api/v1/proxy/settings/export", nil)
 	if exportResp.StatusCode != http.StatusOK {
 		t.Fatalf("export status = %d, want %d", exportResp.StatusCode, http.StatusOK)
 	}
@@ -119,7 +121,7 @@ func TestSettingsExportImportHandlersRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal(backup) error = %v", err)
 	}
-	importResp := mustProxyAPITestRequest(t, app, http.MethodPost, "/api/v1/proxy/settings/import", body)
+	importResp := mustProxyAPITestRequest(t, app, token, http.MethodPost, "/api/v1/proxy/settings/import", body)
 	if importResp.StatusCode != http.StatusOK {
 		t.Fatalf("import status = %d, want %d", importResp.StatusCode, http.StatusOK)
 	}
@@ -160,10 +162,10 @@ func TestSettingsExportImportZipHandlersRoundTrip(t *testing.T) {
 		t.Fatalf("MappingCreate() error = %v", err)
 	}
 
-	app, apiGroup := newProxyAPITestApp(t)
+	app, apiGroup, token := newProxyAPITestApp(t)
 	Register(apiGroup)
 
-	exportResp := mustProxyAPITestRequest(t, app, http.MethodGet, "/api/v1/proxy/settings/export/zip", nil)
+	exportResp := mustProxyAPITestRequest(t, app, token, http.MethodGet, "/api/v1/proxy/settings/export/zip", nil)
 	if exportResp.StatusCode != http.StatusOK {
 		t.Fatalf("export zip status = %d, want %d", exportResp.StatusCode, http.StatusOK)
 	}
@@ -198,6 +200,7 @@ func TestSettingsExportImportZipHandlersRoundTrip(t *testing.T) {
 	importResp := mustProxyAPITestRequestWithContentType(
 		t,
 		app,
+		token,
 		http.MethodPost,
 		"/api/v1/proxy/settings/import/zip",
 		rawZip,
@@ -231,14 +234,14 @@ func TestMappingTestHandlerReturnsDisabledResult(t *testing.T) {
 		t.Fatalf("MappingCreate() error = %v", err)
 	}
 
-	app, apiGroup := newProxyAPITestApp(t)
+	app, apiGroup, token := newProxyAPITestApp(t)
 	Register(apiGroup)
 
 	body, err := json.Marshal(proxyService.ProxyTestRequest{ProbeURL: "https://example.com/generate_204"})
 	if err != nil {
 		t.Fatalf("json.Marshal request error = %v", err)
 	}
-	resp := mustProxyAPITestRequest(t, app, http.MethodPost, "/api/v1/proxy/mappings/"+mapping.ID+"/test", body)
+	resp := mustProxyAPITestRequest(t, app, token, http.MethodPost, "/api/v1/proxy/mappings/"+mapping.ID+"/test", body)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
@@ -300,7 +303,7 @@ func TestMappingSwitchHandlerUpdatesActiveRoute(t *testing.T) {
 		t.Fatalf("MappingCreate() error = %v", err)
 	}
 
-	app, apiGroup := newProxyAPITestApp(t)
+	app, apiGroup, token := newProxyAPITestApp(t)
 	Register(apiGroup)
 
 	body, err := json.Marshal(proxyService.MappingSwitchRequest{
@@ -310,7 +313,7 @@ func TestMappingSwitchHandlerUpdatesActiveRoute(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal request error = %v", err)
 	}
-	resp := mustProxyAPITestRequest(t, app, http.MethodPost, "/api/v1/proxy/mappings/"+mapping.ID+"/switch", body)
+	resp := mustProxyAPITestRequest(t, app, token, http.MethodPost, "/api/v1/proxy/mappings/"+mapping.ID+"/switch", body)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
@@ -354,7 +357,7 @@ func TestMappingSwitchHandlerRejectsNonManualMapping(t *testing.T) {
 		t.Fatalf("MappingCreate() error = %v", err)
 	}
 
-	app, apiGroup := newProxyAPITestApp(t)
+	app, apiGroup, token := newProxyAPITestApp(t)
 	Register(apiGroup)
 
 	body, err := json.Marshal(proxyService.MappingSwitchRequest{
@@ -364,7 +367,7 @@ func TestMappingSwitchHandlerRejectsNonManualMapping(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal request error = %v", err)
 	}
-	resp := mustProxyAPITestRequest(t, app, http.MethodPost, "/api/v1/proxy/mappings/"+mapping.ID+"/switch", body)
+	resp := mustProxyAPITestRequest(t, app, token, http.MethodPost, "/api/v1/proxy/mappings/"+mapping.ID+"/switch", body)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
@@ -387,35 +390,51 @@ func TestNodeTestHandlerRejectsInvalidProbeURL(t *testing.T) {
 		t.Fatalf("NodeCreate() error = %v", err)
 	}
 
-	app, apiGroup := newProxyAPITestApp(t)
+	app, apiGroup, token := newProxyAPITestApp(t)
 	Register(apiGroup)
 
 	body, err := json.Marshal(proxyService.ProxyTestRequest{ProbeURL: "ftp://example.com/file"})
 	if err != nil {
 		t.Fatalf("json.Marshal request error = %v", err)
 	}
-	resp := mustProxyAPITestRequest(t, app, http.MethodPost, "/api/v1/proxy/nodes/"+node.ID+"/test", body)
+	resp := mustProxyAPITestRequest(t, app, token, http.MethodPost, "/api/v1/proxy/nodes/"+node.ID+"/test", body)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusBadRequest)
 	}
 }
 
-func newProxyAPITestApp(t *testing.T) (*fiber.App, huma.API) {
+func newProxyAPITestApp(t *testing.T) (*fiber.App, huma.API, string) {
 	t.Helper()
+	ctx := context.Background()
+	var token string
+	err := model.Transaction(ctx, func(tx model.DBTx) error {
+		username := fmt.Sprintf("test-%s", utils.NewID())
+		password := fmt.Sprintf("pwd-%s", utils.NewID())
+		u, createErr := userService.UserCreate(ctx, tx, username, password, "test", "", "", nil)
+		if createErr != nil {
+			return createErr
+		}
+		token, createErr = userService.AccessTokenGenerate(ctx, tx, u.ID)
+		return createErr
+	})
+	if err != nil {
+		t.Fatalf("create test user: %v", err)
+	}
+
 	app := fiber.New()
 	_, apiGroup := h.NewAPI(app, &utils.AppConfig{APITitle: "test", APIVersion: "1.0.0"})
 	t.Cleanup(func() {
 		_ = app.Shutdown()
 	})
-	return app, apiGroup
+	return app, apiGroup, token
 }
 
-func mustProxyAPITestRequest(t *testing.T, app *fiber.App, method string, target string, body []byte) *http.Response {
+func mustProxyAPITestRequest(t *testing.T, app *fiber.App, token, method string, target string, body []byte) *http.Response {
 	t.Helper()
-	return mustProxyAPITestRequestWithContentType(t, app, method, target, body, "application/json")
+	return mustProxyAPITestRequestWithContentType(t, app, token, method, target, body, "application/json")
 }
 
-func mustProxyAPITestRequestWithContentType(t *testing.T, app *fiber.App, method string, target string, body []byte, contentType string) *http.Response {
+func mustProxyAPITestRequestWithContentType(t *testing.T, app *fiber.App, token, method string, target string, body []byte, contentType string) *http.Response {
 	t.Helper()
 	var reader *bytes.Reader
 	if body == nil {
@@ -429,6 +448,9 @@ func mustProxyAPITestRequestWithContentType(t *testing.T, app *fiber.App, method
 	}
 	if body != nil {
 		req.Header.Set("Content-Type", contentType)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 	resp, err := app.Test(req)
 	if err != nil {

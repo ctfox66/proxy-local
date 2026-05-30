@@ -489,16 +489,13 @@ export const messages = {
     login: {
       errors: {
         failed: '登录失败，请检查用户名和密码。',
-        skipFailed: '跳过登录失败，请确认后端服务已启动。',
       },
       form: {
         password: '密码',
-        skip: '跳过登录',
         submit: '登录',
         username: '用户名',
       },
       messages: {
-        skipSuccess: '已使用内置账号 root 登录。',
         success: '登录成功，正在返回面板。',
       },
       placeholders: {
@@ -506,6 +503,29 @@ export const messages = {
         username: '请输入用户名',
       },
       title: '登录 ProxyHub',
+    },
+    register: {
+      errors: {
+        failed: '注册失败，请重试。',
+        usernameTaken: '用户名已被占用。',
+      },
+      form: {
+        loginLink: '已有账号？登录',
+        nickname: '昵称',
+        password: '密码',
+        submit: '注册',
+        username: '用户名',
+      },
+      link: '没有账号？点击注册',
+      messages: {
+        success: '注册成功，正在返回面板。',
+      },
+      placeholders: {
+        nickname: '输入昵称',
+        password: '请输入密码',
+        username: '请输入用户名',
+      },
+      title: '注册 ProxyHub',
     },
     state: {
       node: {
@@ -1018,16 +1038,13 @@ export const messages = {
     login: {
       errors: {
         failed: 'Sign-in failed. Check your username and password.',
-        skipFailed: 'Skip sign-in failed. Make sure the backend service is running.',
       },
       form: {
         password: 'Password',
-        skip: 'Skip sign-in',
         submit: 'Sign in',
         username: 'Username',
       },
       messages: {
-        skipSuccess: 'Signed in as the built-in root account.',
         success: 'Signed in. Returning to the panel.',
       },
       placeholders: {
@@ -1035,6 +1052,29 @@ export const messages = {
         username: 'Enter username',
       },
       title: 'Sign in to ProxyHub',
+    },
+    register: {
+      errors: {
+        failed: 'Registration failed. Please try again.',
+        usernameTaken: 'Username is already taken.',
+      },
+      form: {
+        loginLink: 'Already have an account? Sign in',
+        nickname: 'Nickname',
+        password: 'Password',
+        submit: 'Register',
+        username: 'Username',
+      },
+      link: "Don't have an account? Register",
+      messages: {
+        success: 'Registered. Returning to the panel.',
+      },
+      placeholders: {
+        nickname: 'Enter nickname',
+        password: 'Enter password',
+        username: 'Enter username',
+      },
+      title: 'Register ProxyHub',
     },
     state: {
       node: {

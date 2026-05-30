@@ -19,8 +19,10 @@ import (
 	"proxy-hub/utils"
 )
 
-func newProxyNodeAPITestApp(t *testing.T) *fiber.App {
+func newProxyNodeAPITestApp(t *testing.T) (*fiber.App, string) {
 	t.Helper()
+	token, _ := createTestUserAndToken(t)
+
 	app := fiber.New()
 	_, v1 := h.NewAPI(app, &utils.AppConfig{
 		APITitle:   "Proxy Hub API",
@@ -33,7 +35,29 @@ func newProxyNodeAPITestApp(t *testing.T) *fiber.App {
 	t.Cleanup(func() {
 		_ = app.Shutdown()
 	})
-	return app
+	return app, token
+}
+
+func mustAuthProxyRequest(t *testing.T, app *fiber.App, token, method, target, body string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(method, target, strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("new request %s %s: %v", method, target, err)
+	}
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := app.Test(req)
+	if err != nil {
+		t.Fatalf("app.Test %s %s: %v", method, target, err)
+	}
+	t.Cleanup(func() {
+		_ = resp.Body.Close()
+	})
+	return resp
 }
 
 func uint16Ptr(value uint16) *uint16 {
@@ -80,14 +104,10 @@ func TestProxyNodeListSupportsPagingSearchAndFilters(t *testing.T) {
 		t.Fatalf("NodeCreate(chain) error = nil, want invalid chain")
 	}
 
-	app := newProxyNodeAPITestApp(t)
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/proxy/nodes?page=1&size=1&keyword=hong&groupId="+group.ID, nil))
-	if err != nil {
-		t.Fatalf("app.Test list failed: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = resp.Body.Close()
-	})
+	app, token := newProxyNodeAPITestApp(t)
+	listReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/nodes?page=1&size=1&keyword=hong&groupId="+group.ID, nil)
+	listReq.Header.Set("Authorization", "Bearer "+token)
+	resp, err := app.Test(listReq)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want %d", resp.StatusCode, http.StatusOK)
 	}
@@ -111,7 +131,9 @@ func TestProxyNodeListSupportsPagingSearchAndFilters(t *testing.T) {
 	if len(idFragment) > 12 {
 		idFragment = idFragment[:12]
 	}
-	idResp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/proxy/nodes?page=1&size=10&keyword="+idFragment, nil))
+	idReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/nodes?page=1&size=10&keyword="+idFragment, nil)
+	idReq.Header.Set("Authorization", "Bearer "+token)
+	idResp, err := app.Test(idReq)
 	if err != nil {
 		t.Fatalf("app.Test ID search failed: %v", err)
 	}
@@ -167,8 +189,10 @@ func TestProxyStateCanOmitNodesAndGroupMembers(t *testing.T) {
 		t.Fatalf("GroupUpdate() error = %v", err)
 	}
 
-	app := newProxyNodeAPITestApp(t)
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/proxy/state?includeNodes=false&includeGroupMembers=false", nil))
+	app, token := newProxyNodeAPITestApp(t)
+	stateReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/state?includeNodes=false&includeGroupMembers=false", nil)
+	stateReq.Header.Set("Authorization", "Bearer "+token)
+	resp, err := app.Test(stateReq)
 	if err != nil {
 		t.Fatalf("app.Test state failed: %v", err)
 	}
@@ -226,8 +250,10 @@ func TestProxyNodeOptionsReturnsLightweightItems(t *testing.T) {
 		t.Fatalf("NodeCreate(second) error = %v", err)
 	}
 
-	app := newProxyNodeAPITestApp(t)
-	resp, err := app.Test(httptest.NewRequest(http.MethodGet, "/api/v1/proxy/node-options?ids="+node.ID+","+second.ID, nil))
+	app, token := newProxyNodeAPITestApp(t)
+	optionsReq := httptest.NewRequest(http.MethodGet, "/api/v1/proxy/node-options?ids="+node.ID+","+second.ID, nil)
+	optionsReq.Header.Set("Authorization", "Bearer "+token)
+	resp, err := app.Test(optionsReq)
 	if err != nil {
 		t.Fatalf("app.Test options failed: %v", err)
 	}
@@ -265,19 +291,7 @@ func TestProxyNodeCreateAcceptsRawVLESSWithoutManualFields(t *testing.T) {
 	}
 	t.Cleanup(model.DBClose)
 
-	app := fiber.New()
-	_, v1 := h.NewAPI(app, &utils.AppConfig{
-		APITitle:   "Proxy Hub API",
-		APIVersion: "test",
-		DocsPath:   "/docs",
-	})
-	h.HumaTypesRegister()
-	h.HumaValidatePatch()
-	proxyAPI.Register(v1)
-	t.Cleanup(func() {
-		_ = app.Shutdown()
-	})
-
+	app, token := newProxyNodeAPITestApp(t)
 	payload := map[string]any{
 		"rawUri": "vless://48a25c54-8826-4657-330e-8db38ef76716@us-n1.qq.org:6515?encryption=none&flow=xtls-rprx-vision&security=reality&sni=www.learn.microsoft.com&fp=chrome&pbk=j0WAnZjnHwzpiPwpHaurvyfqe1yZdbNeRG0isinebQc&spx=%2F&type=tcp&headerType=none#%E7%BE%8E%E8%A5%BFSJ_CN2",
 	}
@@ -290,6 +304,7 @@ func TestProxyNodeCreateAcceptsRawVLESSWithoutManualFields(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -334,18 +349,7 @@ func TestProxyNodeCreateReturnsMappedBusinessError(t *testing.T) {
 	}
 	t.Cleanup(model.DBClose)
 
-	app := fiber.New()
-	_, v1 := h.NewAPI(app, &utils.AppConfig{
-		APITitle:   "Proxy Hub API",
-		APIVersion: "test",
-		DocsPath:   "/docs",
-	})
-	h.HumaTypesRegister()
-	h.HumaValidatePatch()
-	proxyAPI.Register(v1)
-	t.Cleanup(func() {
-		_ = app.Shutdown()
-	})
+	app, token := newProxyNodeAPITestApp(t)
 
 	req, err := http.NewRequest(
 		http.MethodPost,
@@ -356,6 +360,7 @@ func TestProxyNodeCreateReturnsMappedBusinessError(t *testing.T) {
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -386,18 +391,7 @@ func TestProxyNodeImportPreviewDoesNotPersistClashItems(t *testing.T) {
 	}
 	t.Cleanup(model.DBClose)
 
-	app := fiber.New()
-	_, v1 := h.NewAPI(app, &utils.AppConfig{
-		APITitle:   "Proxy Hub API",
-		APIVersion: "test",
-		DocsPath:   "/docs",
-	})
-	h.HumaTypesRegister()
-	h.HumaValidatePatch()
-	proxyAPI.Register(v1)
-	t.Cleanup(func() {
-		_ = app.Shutdown()
-	})
+	app, token := newProxyNodeAPITestApp(t)
 
 	raw := `proxies:
   - name: hk
@@ -420,6 +414,7 @@ proxy-groups:
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -482,18 +477,7 @@ rules:
 	}))
 	t.Cleanup(subscriptionServer.Close)
 
-	app := fiber.New()
-	_, v1 := h.NewAPI(app, &utils.AppConfig{
-		APITitle:   "Proxy Hub API",
-		APIVersion: "test",
-		DocsPath:   "/docs",
-	})
-	h.HumaTypesRegister()
-	h.HumaValidatePatch()
-	proxyAPI.Register(v1)
-	t.Cleanup(func() {
-		_ = app.Shutdown()
-	})
+	app, token := newProxyNodeAPITestApp(t)
 
 	body, err := json.Marshal(map[string]any{"name": "remote", "url": subscriptionServer.URL})
 	if err != nil {
@@ -504,6 +488,7 @@ rules:
 		t.Fatalf("new request: %v", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := app.Test(req)
 	if err != nil {
@@ -554,18 +539,7 @@ func TestProxyNodeHealthBlacklistAndRelease(t *testing.T) {
 	}
 	t.Cleanup(model.DBClose)
 
-	app := fiber.New()
-	_, v1 := h.NewAPI(app, &utils.AppConfig{
-		APITitle:   "Proxy Hub API",
-		APIVersion: "test",
-		DocsPath:   "/docs",
-	})
-	h.HumaTypesRegister()
-	h.HumaValidatePatch()
-	proxyAPI.Register(v1)
-	t.Cleanup(func() {
-		_ = app.Shutdown()
-	})
+	app, token := newProxyNodeAPITestApp(t)
 
 	port := uint16(1080)
 	node, err := proxyService.NodeCreate(t.Context(), nil, proxyService.NodeUpsertRequest{
@@ -587,6 +561,7 @@ func TestProxyNodeHealthBlacklistAndRelease(t *testing.T) {
 		t.Fatalf("new blacklist request: %v", err)
 	}
 	blacklistReq.Header.Set("Content-Type", "application/json")
+	blacklistReq.Header.Set("Authorization", "Bearer "+token)
 	blacklistResp, err := app.Test(blacklistReq)
 	if err != nil {
 		t.Fatalf("app.Test blacklist failed: %v", err)
@@ -614,6 +589,7 @@ func TestProxyNodeHealthBlacklistAndRelease(t *testing.T) {
 	if err != nil {
 		t.Fatalf("new release request: %v", err)
 	}
+	releaseReq.Header.Set("Authorization", "Bearer "+token)
 	releaseResp, err := app.Test(releaseReq)
 	if err != nil {
 		t.Fatalf("app.Test release failed: %v", err)

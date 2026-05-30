@@ -74,6 +74,25 @@ func HumaUserMiddleware(ctx huma.Context, next func(huma.Context)) {
 	next(ctx)
 }
 
+func GlobalAuthMiddleware(ctx huma.Context, next func(huma.Context)) {
+	path := ctx.URL().Path
+
+	if path == "/api/v1/user/signin" {
+		next(ctx)
+		return
+	}
+
+	if path == "/api/v1/user/signup" {
+		exists, err := userService.UserExists(context.Background(), nil)
+		if err != nil || !exists {
+			next(ctx)
+			return
+		}
+	}
+
+	HumaUserMiddleware(ctx, next)
+}
+
 func NewHumaLoggerMiddleware(logger *zap.Logger) func(ctx huma.Context, next func(huma.Context)) {
 	if logger == nil {
 		logger = zap.NewNop()
